@@ -626,7 +626,7 @@ h2.title{
         <p>先設定語言及顯示貨幣。</p>
       </div>
     </div>
-    <div class="grid ui-grid-3">
+    <div class="grid ui-grid-4">
       <div class="ui-field">
         <label>Language / 語言</label>
         <select id="lang" onchange="renderText()">
@@ -650,7 +650,10 @@ h2.title{
 
       <div class="ui-field">
         <label>計劃標題</label>
-        <input id="customPlanTitle" type="text" value="計劃簡述 - 多次重疾保障" oninput="renderText()">
+        <select id="planTitleOption" onchange="renderText()">
+          <option value="multi" selected>計劃簡述 - 多次重疾保障</option>
+          <option value="firstCare">計劃簡述 - 多次重疾保障 (首護摯寶)</option>
+        </select>
       </div>
     </div>
   </div>
@@ -895,15 +898,6 @@ function getNum(id, fallback=0){
   return isFinite(n) ? n : fallback;
 }
 
-function escapeHTML(value){
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
 function toggleCurrencyRateField(){
   const currencyEl = document.getElementById("currency");
   const group = document.getElementById("cnyRateGroup");
@@ -940,8 +934,12 @@ function renderText(){
   const coverageUSD = parseFloat(document.getElementById("coverageUSD").value) || 0;
   const paymentTerm = parseInt(document.getElementById("paymentTerm").value, 10) || 18;
   const premiumUSD = parseFloat(document.getElementById("premiumUSD").value) || 0;
+  const planTitleOption = document.getElementById("planTitleOption") ? document.getElementById("planTitleOption").value : "multi";
+  const selectedPlanTitle = planTitleOption === "firstCare"
+    ? "計劃簡述 - 多次重疾保障 (首護摯寶)"
+    : t.plan;
 
-  const bonusRate = age < 31 ? 0.5 : 0.35;
+  const bonusRate = planTitleOption === "firstCare" ? 0.5 : (age < 31 ? 0.5 : 0.35);
   const bonusPercentText = bonusRate === 0.5 ? (lang === "trad" ? "五十" : "五十") : (lang === "trad" ? "三十五" : "三十五");
   const bonusUSD = coverageUSD * bonusRate;
   const totalUSD = coverageUSD + bonusUSD;
@@ -951,8 +949,6 @@ function renderText(){
   const totalLocal = totalUSD * rate;
 
   const planTitle = `${name} ${age}${t.age} (${gender})`;
-  const customPlanTitleInput = document.getElementById("customPlanTitle");
-  const customPlanTitle = customPlanTitleInput && customPlanTitleInput.value.trim() ? customPlanTitleInput.value.trim() : t.plan;
   const coverageWan = coverageUSD / 10000;
   const bonusWan = bonusUSD / 10000;
 
@@ -1010,8 +1006,8 @@ function renderText(){
     : `头十年额外赠送百分之${bonusPercentText}之保障额`;
 
   document.getElementById("contentBox").innerHTML = `
-    <h1>${escapeHTML(planTitle)}</h1>
-    <h2 class="title">${escapeHTML(customPlanTitle)}</h2>
+    <h1>${planTitle}</h1>
+    <h2 class="title">${selectedPlanTitle}</h2>
     <div class="subtitle">${subtitle}</div>
 
     <table>
@@ -1092,10 +1088,32 @@ function isIOSSafari(){
 }
 
 function getPDFFileName(){
-  const clientName = (document.getElementById("clientName").value || "Client").replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "_");
-  const clientAge = document.getElementById("clientAge").value || "Age";
-  const gender = document.getElementById("gender").value || "Gender";
-  return `OYS2_${clientName}_${clientAge}_${gender}.pdf`;
+  const lang = document.getElementById("lang") ? document.getElementById("lang").value : "trad";
+  const t = text[lang] || text.trad;
+
+  const cleanFilePart = function(value, fallback){
+    return String(value || fallback || "")
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "")
+      .replace(/\s+/g, " ");
+  };
+
+  const formatWan = function(value){
+    const n = parseFloat(value);
+    if(!isFinite(n) || n <= 0) return "0";
+    const wan = n / 10000;
+    return Number.isInteger(wan) ? String(wan) : String(parseFloat(wan.toFixed(2)));
+  };
+
+  const clientName = cleanFilePart(document.getElementById("clientName").value, "Client");
+  const clientAge = cleanFilePart(document.getElementById("clientAge").value, "Age");
+  const gender = cleanFilePart(document.getElementById("gender").value, "Gender");
+  const paymentTerm = cleanFilePart(document.getElementById("paymentTerm").value, "yr");
+  const coverageWan = formatWan(document.getElementById("coverageUSD").value);
+  const planTitleOption = document.getElementById("planTitleOption") ? document.getElementById("planTitleOption").value : "multi";
+  const planCode = planTitleOption === "firstCare" ? "OYSFG2" : "OYS2";
+
+  return `${clientName} ${clientAge}age (${gender}) ${planCode} ${paymentTerm}yr ${coverageWan}w ${t.summary}.pdf`;
 }
 
 async function buildPDF(){
